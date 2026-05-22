@@ -1,7 +1,29 @@
 [project]
 name = "visual-search"
 version = "0.1.0"
-description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "torch",
+  "torchvision",
+  "transformers",
+  "pillow",
+  "qdrant-client",
+  "fastapi",
+  "uvicorn",
+  "datasets",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
+
+[tool.uv.workspace]
+members = [
+    "visual-search",
+]
