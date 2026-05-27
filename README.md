@@ -1,55 +1,61 @@
-# Visual Product Search Engine with CLIP + Qdrant
+# Visual Product Search Engine
 
-A complete starter project for building a text-to-image product search engine using:
-- **CLIP** for image and text embeddings
-- **Qdrant** as the vector database
-- **FastAPI** for the API layer
-- **Fashion MNIST** as the demo product image dataset
+Most search engines match keywords — type "blue shoes" and they look for those exact words. This project does something different: it understands meaning. Type "something to wear on a rainy day" and it will surface boots, raincoats, and umbrellas — because it understands what you're looking for, not just what you typed.
 
-This project is based on the architecture described in the attached PDF and implements the full flow: dataset preparation, embedding generation, vector indexing, semantic search, and API serving.
+This is a fully working semantic search engine built over a product image catalog. It understands both text and images in the same "language", so a written description and a product photo can be directly compared and matched.
+
+---
+
+## How It Works
+
+The core idea is simple: convert every product image and every search query into a list of numbers that captures their meaning. Images and text that mean similar things end up with similar numbers. Search becomes a matter of finding the closest match.
+
+Here's the full flow:
+
+1. **Prepare the catalog** — product images are downloaded and standardised into a consistent format the model can process.
+2. **Understand the images** — each image is passed through CLIP, an AI model trained on hundreds of millions of image-text pairs. It converts each image into a 512-number representation of its visual meaning.
+3. **Store the meanings** — those 512-number vectors are saved into Qdrant, a database built specifically for this kind of similarity-based lookup. Think of it as a search index, but for meaning rather than keywords.
+4. **Search by text** — when a user types a query, CLIP converts that text into the same 512-number format. Because CLIP was trained on both images and text together, the numbers are directly comparable.
+5. **Find the closest match** — Qdrant finds whichever stored image vectors are mathematically closest to the query vector and returns them as results.
+6. **Serve the results** — a lightweight API exposes this as a single search endpoint any frontend or service can call.
+
+---
 
 ## Project Structure
 
 ```text
 visual-search/
-├── pyproject.toml
-├── README.md
-├── data/
-│   ├── images/
-│   └── qdrant_db/
-└── src/
-    ├── prepare_data.py
-    ├── embedder.py
-    ├── store.py
-    ├── indexer.py
-    ├── search.py
-    └── main.py
+├── src/
+│   ├── prepare_data.py   # Downloads and prepares product images
+│   ├── embedder.py       # Converts images and text into vectors using CLIP
+│   ├── store.py          # Manages the Qdrant vector database
+│   ├── indexer.py        # Runs the full image → vector → database pipeline
+│   ├── search.py         # CLI tool for testing queries directly
+│   └── main.py           # FastAPI server exposing the search endpoint
+└── data/
+    ├── images/           # Prepared product images
+    └── qdrant_db/        # Local vector database storage
 ```
 
-## Features
-
-- Downloads and prepares 500 Fashion MNIST images
-- Converts images into CLIP embeddings
-- Stores vectors in a persistent local Qdrant database
-- Supports natural-language text search over images
-- Exposes `/health` and `/search` FastAPI endpoints
-- Uses cosine similarity over normalized CLIP embeddings
+---
 
 ## Requirements
 
 - Python 3.11+
-- `uv` package manager
-- Optional NVIDIA GPU for faster CLIP inference
+- `uv` package manager (handles dependencies cleanly without virtualenv setup)
+- A GPU is optional — the model runs fine on CPU, just slower on large catalogs
 
-Install `uv` if needed:
+Install `uv`:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## Setup
+---
 
-### 1. Create and enter the project
+## Setup & Running
+
+### 1. Clone the repo
 
 ```bash
 git clone https://github.com/deepakdeepu000/Visual_Search.git
@@ -62,27 +68,23 @@ cd visual-search
 uv sync
 ```
 
-If you want CPU-only PyTorch, you can simplify `pyproject.toml` and remove the CUDA index configuration.
-
-## Run the project
-
-### Step 1: Prepare dataset
+### 3. Prepare the product catalog
 
 ```bash
 uv run python src/prepare_data.py
 ```
 
-This downloads Fashion MNIST, selects 500 shuffled images, resizes them to 224x224, converts them to RGB, and saves them to `data/images/`.
+Downloads 500 Fashion MNIST product images and standardises them for the model.
 
-### Step 2: Build the vector index
+### 4. Index the catalog
 
 ```bash
 uv run python src/indexer.py
 ```
 
-This loads CLIP, generates embeddings for all saved images, and stores them in Qdrant under the `products` collection.
+Runs every image through CLIP and stores the resulting vectors in Qdrant. This only needs to be done once — or whenever the catalog changes.
 
-### Step 3: Test text search from CLI
+### 5. Try a search from the command line
 
 ```bash
 uv run python src/search.py "sneakers"
@@ -90,35 +92,17 @@ uv run python src/search.py "summer dress"
 uv run python src/search.py "ankle boots"
 ```
 
-### Step 4: Start the API server
+### 6. Start the API server
 
 ```bash
 uv run uvicorn src.main:app --reload --port 8000
 ```
 
-### Step 5: Test the API
-
-Health endpoint:
-
-```bash
-curl "http://127.0.0.1:8000/health"
-```
-
-Search endpoint:
+### 7. Query the API
 
 ```bash
 curl "http://127.0.0.1:8000/search?q=sneakers&top_k=5"
 ```
-
-## API Endpoints
-
-### `GET /health`
-Returns API status, model name, and total indexed items.
-
-### `GET /search`
-Query parameters:
-- `q`: natural language search query
-- `top_k`: number of results to return, from 1 to 20
 
 Example response:
 
@@ -139,28 +123,33 @@ Example response:
 }
 ```
 
-## How it works
+---
 
-1. **Prepare data**: Download Fashion MNIST images and store them locally.
-2. **Embed images**: Use CLIP image encoder to generate 512-dimensional vectors.
-3. **Store vectors**: Save vectors plus metadata in Qdrant.
-4. **Embed text**: Convert a user query into the same vector space.
-5. **Search**: Use cosine similarity in Qdrant to retrieve nearest image vectors.
-6. **Serve results**: Return ranked matches through CLI or API.
+## API Reference
+
+### `GET /health`
+Returns whether the API is running, which model is loaded, and how many products are indexed.
+
+### `GET /search`
+| Parameter | Description |
+|---|---|
+| `q` | Your search query in plain English |
+| `top_k` | How many results to return (1–20) |
+
+---
 
 ## Notes
 
-- The default model is `openai/clip-vit-base-patch32`, which outputs 512-dimensional embeddings.
-- If you switch to `openai/clip-vit-large-patch14`, update the Qdrant vector dimension from `512` to `768` in `src/store.py` and rebuild the index.
-- To reset the database, delete `data/qdrant_db/` and rerun indexing.
-- The first CLIP load can take a few seconds and ~350MB RAM.
+- The default CLIP model outputs 512-dimensional vectors. If you switch to `clip-vit-large-patch14`, update the vector dimension to `768` in `src/store.py` and reindex.
+- To reset the database and start fresh, delete `data/qdrant_db/` and rerun the indexer.
+- First load of CLIP takes a few seconds and uses ~350MB of RAM.
 
+---
 
-## Future improvements
+## What's Next
 
-- Upload your own product catalog instead of Fashion MNIST
-- Add image-to-image search
-- Use Qdrant Cloud instead of local storage
-- Add a frontend UI for browsing results
-- Add Docker support
-- Add batch indexing progress tracking
+- Swap in your own product catalog instead of Fashion MNIST
+- Add image-to-image search (find products that look like a photo)
+- Move from local Qdrant storage to Qdrant Cloud for production use
+- Add a frontend UI for browsing results visually
+- Containerise with Docker for easy deployment
